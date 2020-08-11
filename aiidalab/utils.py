@@ -2,7 +2,9 @@
 
 import json
 import time
+from pathlib import Path
 from urllib.parse import urlparse
+from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode
 from collections import defaultdict
 from functools import wraps
 from threading import Lock
@@ -10,7 +12,8 @@ from threading import Lock
 import requests
 from IPython.lib import backgroundjobs as bg
 
-from .config import AIIDALAB_REGISTRY
+from .config import AIIDALAB_APPS, AIIDALAB_REGISTRY
+from .environment import AppEnvironment
 
 
 def update_cache():
@@ -45,6 +48,27 @@ def load_app_registry():
         except ValueError:
             print("Registry server is unavailable! Can't check for the updates")
             return dict(apps=dict(), catgories=dict())
+
+
+def url_for(endpoint):
+    """Generate the fully-qualified URL for a given endpoint."""
+    parsed_url = urlsplit(endpoint)
+    url_path = Path(parsed_url.path)
+    query_string = parse_qs(parsed_url.query)
+
+    try:
+        app_name = url_path.resolve().relative_to(AIIDALAB_APPS).parts[0]
+    except ValueError:
+        raise ValueError("Endpoint argument to url_for() must be relative to the AIIDALAB_APPS path.")
+
+    app_environment = AppEnvironment(app_name)
+
+    if app_environment.installed():
+        query_string.setdefault('kernel_name', app_environment.kernel_name)
+    else:  # Use fallback kernel:
+        query_string.setdefault('kernel_name', 'python3')
+
+    return urlunsplit(parsed_url._replace(query=urlencode(query_string, doseq=True)))
 
 
 class throttled:  # pylint: disable=invalid-name
