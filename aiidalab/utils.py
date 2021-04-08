@@ -6,7 +6,7 @@ import time
 from urllib.parse import urlparse
 from collections import defaultdict
 from functools import wraps
-from subprocess import check_output
+from subprocess import run
 from threading import Lock
 
 import requests
@@ -105,7 +105,7 @@ class Package:
         self.version = version
 
     def __str__(self):
-        return f"{type(self).__name__}({self.name, self.version})"
+        return f"{type(self).__name__}({self.name}, {self.version})"
 
     def fulfills(self, requirement):
         """Returns True if this entry fullfills the requirement."""
@@ -116,9 +116,13 @@ class Package:
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=60))
-def find_installed_packages():
+def find_installed_packages(python_bin=None):
     """Return all currently installed packages."""
-    output = check_output(
-        [sys.executable, "-m", "pip", "list", "--format=json"], encoding="utf-8"
-    )
+    if python_bin is None:
+        python_bin = sys.executable
+    output = run(
+        [python_bin, "-m", "pip", "list", "--format=json"],
+        encoding="utf-8",
+        capture_output=True,
+    ).stdout
     return [Package(**package) for package in json.loads(output)]
